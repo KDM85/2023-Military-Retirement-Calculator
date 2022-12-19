@@ -11,6 +11,7 @@ path = os.getcwd() + "/MilitaryRetirementCalculator/PayChart.db"
 with sqlite3.connect(path) as db:
     cursor = db.cursor()
 
+# Dictionary of Pay Grades
 grades = [
     "E-1 <4 Mon",
     "E-1 >4 Mon",
@@ -103,6 +104,7 @@ def windowRetirementCalculator():
     )
 
 
+# Calculate the number of days between a date and today
 def getDays(inputDate):
     now = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
     currentDate = datetime.strptime(now, "%Y-%m-%d %H:%M:%S")
@@ -110,11 +112,13 @@ def getDays(inputDate):
     return (currentDate - dto).days
 
 
-def getPay(yearsOfService, year, grade):
+# Retrieve the base pay from the database
+def getPay(yearsOfService, year, grade, percentage):
     cursor.execute(
         "SELECT * FROM '" + year + "' WHERE PayGrade = ?",
         [(grade)],
     )
+    # Find the column in the database based on the Years of Service
     yearsOfService = int(yearsOfService)
     if yearsOfService >= 40:
         column = 22
@@ -161,7 +165,7 @@ def getPay(yearsOfService, year, grade):
             column = 20
         case 38 | 39:
             column = 21
-    return float(cursor.fetchall()[0][column]) / 2
+    return float(cursor.fetchall()[0][column]) * percentage
 
 
 window = windowRetirementCalculator()
@@ -171,6 +175,7 @@ while True:
     event, values = window.read()
     if event == sg.WIN_CLOSED:
         break
+    # Limit input to numeric values
     if event == "txtYearsOfService" and values["txtYearsOfService"]:
         if values["txtYearsOfService"][-1] not in ("0123456789"):
             window["txtYearsOfService"].update(values["txtYearsOfService"][:-1])
@@ -187,10 +192,16 @@ while True:
         year1Index = index
         year2Index = index
 
+        # Calculate the percentage rate at Years of Service * 2.5%
+        percentage = int(values["txtYearsOfService"]) * 0.025
+        if percentage > 0.75:
+            percentage = 0.75
+
         year1 = getPay(
             values["txtYearsOfService"],
             "2023",
             values["cboPayGrade"],
+            percentage,
         )
         if getDays(values["txtDateOfRank"]) <= 365:
             year1Index = index - 1
@@ -198,6 +209,7 @@ while True:
             int(values["txtYearsOfService"]) - 1,
             "2022",
             grades[year1Index],
+            percentage,
         )
         if getDays(values["txtDateOfRank"]) <= 730:
             year2Index = index - 1
@@ -205,8 +217,11 @@ while True:
             int(values["txtYearsOfService"]) - 2,
             "2021",
             grades[year2Index],
+            percentage,
         )
+        # Calculate the "High 3" average
         retPay = (year1 + year2 + year3) / 3
+        # Show totals
         vAPay = float(values["txtMonthlyVAPayment"])
         window["txtMonthlyRetirementPay"].update("${:0,.2f}".format(retPay))
         window["txtAnnualPay"].update("${:0,.2f}".format((retPay + vAPay) * 12))
